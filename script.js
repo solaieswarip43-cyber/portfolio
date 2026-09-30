@@ -1,111 +1,56 @@
-// LocalStorage Key
-const LOCAL_STORAGE_KEY = 'portfolio_todos';
 
-// State Management
-let todos = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY)) || [];
-let currentFilter = 'all';
+// ==========================================
+// WEATHER DASHBOARD (API & ASYNC/AWAIT)
+// ==========================================
+const weatherForm = document.getElementById('weather-form');
+const cityInput = document.getElementById('city-input');
+const weatherResult = document.getElementById('weather-result');
+const cityNameEl = document.getElementById('city-name');
+const tempEl = document.getElementById('temperature');
+const descEl = document.getElementById('weather-desc');
+const humidityEl = document.getElementById('humidity');
+const windEl = document.getElementById('wind-speed');
+const weatherError = document.getElementById('weather-error');
 
-// DOM Elements
-const todoForm = document.getElementById('todo-form');
-const todoInput = document.getElementById('todo-input');
-const todoList = document.getElementById('todo-list');
-const filterButtons = document.querySelectorAll('.filter-btn');
+if (weatherForm) {
+  weatherForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const city = cityInput.value.trim();
+    if (!city) return;
 
-// 1. Save to LocalStorage
-function saveTodos() {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(todos));
-}
+    weatherError.textContent = 'Fetching weather data...';
+    weatherResult.style.display = 'none';
 
-// 2. Render Function (Read & Filter)
-function renderTodos() {
-  todoList.innerHTML = '';
+    try {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+      const geoData = await geoRes.json();
 
-  const filteredTodos = todos.filter(todo => {
-    if (currentFilter === 'active') return !todo.completed;
-    if (currentFilter === 'completed') return todo.completed;
-    return true; // 'all'
-  });
-
-  filteredTodos.forEach(todo => {
-    const li = document.createElement('li');
-    li.className = `todo-item ${todo.completed ? 'completed' : ''}`;
-    li.dataset.id = todo.id;
-    li.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; margin-bottom: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;';
-
-    li.innerHTML = `
-      <span class="todo-text" style="${todo.completed ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHTML(todo.text)}</span>
-      <div>
-        <button type="button" class="action-btn toggle-btn">${todo.completed ? 'Undo' : 'Complete'}</button>
-        <button type="button" class="action-btn delete-btn" style="background-color: #dc2626;">Delete</button>
-      </div>
-    `;
-
-    todoList.appendChild(li);
-  });
-}
-
-// XSS Safety Helper
-function escapeHTML(str) {
-  return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-  );
-}
-
-// 3. Create (Add Task)
-todoForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = todoInput.value.trim();
-  if (!text) return;
-
-  const newTodo = {
-    id: Date.now().toString(),
-    text: text,
-    completed: false
-  };
-
-  todos.push(newTodo);
-  saveTodos();
-  renderTodos();
-  todoInput.value = '';
-});
-
-// 4. Event Delegation (Update & Delete)
-todoList.addEventListener('click', (e) => {
-  const target = e.target;
-  const li = target.closest('li');
-  if (!li) return;
-
-  const todoId = li.dataset.id;
-
-  // Toggle Complete (Update)
-  if (target.classList.contains('toggle-btn')) {
-    todos = todos.map(todo => {
-      if (todo.id === todoId) {
-        return { ...todo, completed: !todo.completed };
+      if (!geoData.results || geoData.results.length === 0) {
+        throw new Error('City not found. Please try another city.');
       }
-      return todo;
-    });
-    saveTodos();
-    renderTodos();
-  }
 
-  // Delete Task (Delete)
-  if (target.classList.contains('delete-btn')) {
-    todos = todos.filter(todo => todo.id !== todoId);
-    saveTodos();
-    renderTodos();
-  }
-});
+      const { latitude, longitude, name, country } = geoData.results[0];
 
-// 5. Advanced Filter (All, Active, Completed)
-filterButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    filterButtons.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentFilter = btn.dataset.filter;
-    renderTodos();
+      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+      const weatherData = await weatherRes.json();
+
+      if (!weatherData.current_weather) {
+        throw new Error('Unable to retrieve weather right now.');
+      }
+
+      const current = weatherData.current_weather;
+
+      cityNameEl.textContent = `${name}, ${country}`;
+      tempEl.textContent = `Temperature: ${current.temperature} °C`;
+      descEl.textContent = `Wind Code: ${current.weathercode}`;
+      humidityEl.textContent = `Time: ${current.time}`;
+      windEl.textContent = `Wind Speed: ${current.windspeed} km/h`;
+
+      weatherError.textContent = '';
+      weatherResult.style.display = 'block';
+    } catch (err) {
+      weatherResult.style.display = 'none';
+      weatherError.textContent = err.message || 'Error fetching weather data.';
+    }
   });
-});
-
-// Page load aagumbole render pannanum
-document.addEventListener('DOMContentLoaded', renderTodos);
+}
